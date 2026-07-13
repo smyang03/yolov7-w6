@@ -151,6 +151,22 @@ def make_training_p3lite_p4p5(base, nc, width):
     return cfg
 
 
+def make_training_p3lite_p4p6(base, nc, width):
+    cfg = make_p3lite_p4p6(base, nc, width)
+    head = deepcopy(cfg["head"][:-1])
+    head.extend(
+        [
+            [76, 1, "Conv", [256, 3, 1]],  # 101 P3 aux
+            [71, 1, "Conv", [640, 3, 1]],  # 102 P4 aux
+            [59, 1, "Conv", [960, 3, 1]],  # 103 P5 aux
+            [47, 1, "Conv", [1280, 3, 1]],  # 104 P6 aux
+            [[77, 78, 99, 100, 101, 102, 103, 104], 1, "IAuxDetect", ["nc", "anchors"]],  # 105 Detect(P3,P4,P5,P6)
+        ]
+    )
+    cfg["head"] = head
+    return cfg
+
+
 def main():
     parser = argparse.ArgumentParser(description="Create SIAV2 P3/deep-head tradeoff deploy cfgs.")
     parser.add_argument("--base", default="cfg/deploy/yolov7-w6.yaml")
@@ -178,6 +194,9 @@ def main():
     if args.training_out_dir:
         training_path = Path(args.training_out_dir) / "yolov7-l6-siav2-p3lite-p4p5-w250.yaml"
         write_cfg(training_path, make_training_p3lite_p4p5(base, args.nc, args.width))
+        print(training_path)
+        training_path = Path(args.training_out_dir) / "yolov7-l6-siav2-p3lite-p4p6-w250.yaml"
+        write_cfg(training_path, make_training_p3lite_p4p6(base, args.nc, args.width))
         print(training_path)
 
 

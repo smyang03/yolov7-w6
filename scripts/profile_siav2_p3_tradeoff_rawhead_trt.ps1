@@ -1,12 +1,19 @@
-$ErrorActionPreference = "Continue"
+param(
+    [string]$Trtexec = "C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v12.6\bin\trtexec.exe"
+)
+
+$ErrorActionPreference = "Stop"
 
 $root = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)
 Set-Location $root
+. "$root\scripts\siav2_trt_guard.ps1"
 
-$trtexec = "C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v12.6\bin\trtexec.exe"
+$trtexec = $Trtexec
+$trtVersion = Assert-SIAV2TensorRTVersion -Trtexec $trtexec
 $onnxDir = "runs\siav2\onnx"
 $trtDir = "runs\siav2\trt"
 New-Item -ItemType Directory -Force -Path $onnxDir, $trtDir | Out-Null
+Set-Content -Path "$trtDir\p3_tradeoff_rawhead_trt_version.txt" -Value "TensorRT trtexec $trtVersion"
 
 conda run --no-capture-output -n yolov7 python tools\make_siav2_p3_tradeoff_variants.py
 

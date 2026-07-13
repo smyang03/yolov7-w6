@@ -10,6 +10,7 @@ param(
     [string]$Cfg = "cfg\training\yolov7-w6-nc16.yaml",
     [string]$Hyp = "data\hyp.scratch.p6.yaml",
     [int]$Workers = 8,
+    [int]$Seed = 2,
     [int[]]$Freeze = @(0),
     [switch]$NoAutoAnchor
 )
@@ -30,6 +31,7 @@ $args = @(
     "--project", $Project,
     "--name", $Name,
     "--workers", "$Workers",
+    "--seed", "$Seed",
     "--close-mosaic", "20",
     "--grad-clip", "10",
     "--freeze"

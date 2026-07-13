@@ -7,6 +7,7 @@ param(
     [string]$W6Weights = "runs\siav2_train\w6_nc16_teacher\weights\best.pt",
     [string]$P4P6Weights = "runs\siav2_distill_train\siav2_p4p6_w250_distill\weights\best.pt",
     [string]$P3LiteWeights = "runs\siav2_distill_train\siav2_p3lite_p4p5_w250_distill\weights\best.pt",
+    [string]$P3LiteP4P6Weights = "runs\siav2_distill_train\siav2_p3lite_p4p6_w250_distill\weights\best.pt",
     [double]$SmallMaxSide = 64,
     [double]$MediumMaxSide = 128
 )
@@ -18,7 +19,8 @@ Set-Location $root
 $models = @(
     @{ Name = "w6_nc16_teacher"; Weights = $W6Weights },
     @{ Name = "siav2_p4p6_w250_distill"; Weights = $P4P6Weights },
-    @{ Name = "siav2_p3lite_p4p5_w250_distill"; Weights = $P3LiteWeights }
+    @{ Name = "siav2_p3lite_p4p5_w250_distill"; Weights = $P3LiteWeights },
+    @{ Name = "siav2_p3lite_p4p6_w250_distill"; Weights = $P3LiteP4P6Weights }
 )
 
 foreach ($model in $models) {

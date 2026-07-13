@@ -1,12 +1,19 @@
-$ErrorActionPreference = "Continue"
+param(
+    [string]$Trtexec = "C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v12.6\bin\trtexec.exe"
+)
+
+$ErrorActionPreference = "Stop"
 
 $root = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)
 Set-Location $root
+. "$root\scripts\siav2_trt_guard.ps1"
 
-$trtexec = "C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v12.6\bin\trtexec.exe"
+$trtexec = $Trtexec
+$trtVersion = Assert-SIAV2TensorRTVersion -Trtexec $trtexec
 $onnxDir = "runs\siav2\onnx"
 $trtDir = "runs\siav2\trt"
 New-Item -ItemType Directory -Force -Path $onnxDir, $trtDir, "weights" | Out-Null
+Set-Content -Path "$trtDir\reinforced_coco80_trt_version.txt" -Value "TensorRT trtexec $trtVersion"
 
 $siav2Train = "runs\siav2_coco128_train\siav2_p4small_aux_reinforced_1280_e100\weights\best.pt"
 $siav2Deploy = "weights\siav2-p4small-aux-reinforced-coco128-deploy.pt"

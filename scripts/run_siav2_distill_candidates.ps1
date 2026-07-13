@@ -9,9 +9,11 @@ param(
     [string[]]$Candidates = @("p4p6", "p3lite"),
     [string]$P4P6Weights = "",
     [string]$P3LiteWeights = "",
+    [string]$P3LiteP4P6Weights = "",
     [double]$DistillWeight = 0.25,
     [double]$DistillSmallGain = 1.25,
     [double]$P4P6CrossWeight = 0.5,
+    [int]$Seed = 2,
     [int[]]$Freeze = @(0),
     [switch]$NoAutoAnchor
 )
@@ -39,6 +41,15 @@ $candidateMap = @{
         CrossStrides = @()
         CrossWeight = "0.0"
     }
+    "p3lite_p4p6" = @{
+        Name = "siav2_p3lite_p4p6_w250_distill"
+        Cfg = "cfg\training\yolov7-l6-siav2-p3lite-p4p6-w250.yaml"
+        Hyp = "data\hyp.siav2-p3lite-p4p6-aux-relaxed.yaml"
+        Weights = $P3LiteP4P6Weights
+        Strides = @("8", "16", "32", "64")
+        CrossStrides = @()
+        CrossWeight = "0.0"
+    }
 }
 
 foreach ($candidate in $Candidates) {
@@ -50,7 +61,6 @@ foreach ($candidate in $Candidates) {
         "train_aux.py",
         "--data", $Data,
         "--cfg", $item.Cfg,
-        "--weights", $item.Weights,
         "--hyp", $item.Hyp,
         "--epochs", "$Epochs",
         "--batch-size", "$BatchSize",
@@ -58,6 +68,7 @@ foreach ($candidate in $Candidates) {
         "--device", $Device,
         "--project", $Project,
         "--name", $item.Name,
+        "--seed", "$Seed",
         "--close-mosaic", "20",
         "--grad-clip", "10",
         "--distill",
@@ -77,6 +88,9 @@ foreach ($candidate in $Candidates) {
 
     if ($item.CrossStrides.Count -gt 0) {
         $args += @("--distill-cross-weight", $item.CrossWeight, "--distill-cross-strides") + $item.CrossStrides
+    }
+    if ($item.Weights -ne "") {
+        $args += @("--weights", $item.Weights)
     }
     if ($NoAutoAnchor) {
         $args += "--noautoanchor"

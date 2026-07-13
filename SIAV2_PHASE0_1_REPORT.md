@@ -3,6 +3,8 @@
 작성일: 2026-07-11  
 환경: Windows, conda env `yolov7`, Python 3.8, torch `1.13.1+cu116`, TensorRT `10.7.0` Python / `trtexec` TensorRT `10.14.1`, GPU `NVIDIA GeForce RTX 4090`
 
+Latency policy update: official SIAV2 latency evidence is accepted only from `trtexec` TensorRT `8.6.1.x` or `10.14.x`. The Python TensorRT binding version in this historical environment line is not used as a latency basis.
+
 ## 결론
 
 TRT FP16 기준 2배 latency gate를 통과하는 후보를 찾았다.
