@@ -25,6 +25,7 @@ SEED="${SEED:-2}"
 MASTER_PORT="${MASTER_PORT:-9527}"
 DIST_BACKEND="${DIST_BACKEND:-nccl}"
 TEACHER_INIT_WEIGHTS="${TEACHER_INIT_WEIGHTS:-}"
+TEACHER_WEIGHTS_PATH="${TEACHER_WEIGHTS_PATH:-}"
 STUDENT_INIT_WEIGHTS="${STUDENT_INIT_WEIGHTS:-}"
 SKIP_EDA="${SKIP_EDA:-0}"
 SKIP_TEACHER="${SKIP_TEACHER:-0}"
@@ -67,7 +68,27 @@ fi
 TEACHER_NAME="w6_crowdhuman_teacher"
 TEACHER_WEIGHTS="runs/crowdhuman_train/${TEACHER_NAME}/weights/best.pt"
 
+resolve_teacher_weights() {
+  if [[ -n "$TEACHER_WEIGHTS_PATH" ]]; then
+    echo "$TEACHER_WEIGHTS_PATH"
+    return
+  fi
+
+  local latest=""
+  latest="$(find runs/crowdhuman_train -path "*/weights/best.pt" -type f 2>/dev/null \
+    | grep "/${TEACHER_NAME}" \
+    | xargs -r ls -t \
+    | head -n 1 || true)"
+
+  if [[ -n "$latest" ]]; then
+    echo "$latest"
+  else
+    echo "$TEACHER_WEIGHTS"
+  fi
+}
+
 if [[ "$SKIP_TEACHER" != "1" ]]; then
+  echo "==> Training W6 teacher/baseline"
   TEACHER_ARGS=(
     --data "$DATA"
     --cfg cfg/training/yolov7-w6-nc16.yaml
@@ -91,6 +112,9 @@ if [[ "$SKIP_TEACHER" != "1" ]]; then
   fi
   run_ddp "$MASTER_PORT" "${TEACHER_ARGS[@]}"
 fi
+
+TEACHER_WEIGHTS="$(resolve_teacher_weights)"
+echo "TEACHER_WEIGHTS=$TEACHER_WEIGHTS"
 
 if [[ "$SKIP_STUDENTS" != "1" || "$SKIP_EVAL" != "1" ]]; then
   if [[ ! -f "$TEACHER_WEIGHTS" ]]; then
@@ -173,6 +197,7 @@ run_student_nodistill() {
 }
 
 if [[ "$SKIP_STUDENTS" != "1" ]]; then
+  echo "==> Training SIAV2 p4p6 distill"
   run_student_distill "$((MASTER_PORT + 1))" \
     siav2_p4p6_w250_crowdhuman_distill \
     cfg/training/yolov7-l6-siav2-p4p6-pruned-w250.yaml \
@@ -181,12 +206,14 @@ if [[ "$SKIP_STUDENTS" != "1" ]]; then
     --distill-cross-weight 0.5 \
     --distill-cross-strides 8:16
 
+  echo "==> Training SIAV2 p3lite-p4p5 distill"
   run_student_distill "$((MASTER_PORT + 2))" \
     siav2_p3lite_p4p5_w250_crowdhuman_distill \
     cfg/training/yolov7-l6-siav2-p3lite-p4p5-w250.yaml \
     data/hyp.siav2-p3lite-aux-relaxed.yaml \
     --distill-strides 8 16 32
 
+  echo "==> Training SIAV2 p3lite-p4p6 distill"
   run_student_distill "$((MASTER_PORT + 3))" \
     siav2_p3lite_p4p6_w250_crowdhuman_distill \
     cfg/training/yolov7-l6-siav2-p3lite-p4p6-w250.yaml \
@@ -194,6 +221,7 @@ if [[ "$SKIP_STUDENTS" != "1" ]]; then
     --distill-strides 8 16 32 64
 
   if [[ "$SKIP_NODISTILL" != "1" ]]; then
+    echo "==> Training SIAV2 p4p6 no-distill ablation"
     run_student_nodistill "$((MASTER_PORT + 101))" \
       siav2_p4p6_w250_crowdhuman_nodistill \
       cfg/training/yolov7-l6-siav2-p4p6-pruned-w250.yaml \
