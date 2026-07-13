@@ -320,6 +320,8 @@ def train(hyp, opt, device, tb_writer=None):
             box_weight=opt.distill_box_weight,
             small_gain=opt.distill_small_gain,
             small_px=opt.distill_small_px,
+            cross_strides=opt.distill_cross_strides,
+            cross_weight=opt.distill_cross_weight,
         )
         if rank in [-1, 0]:
             logger.info(
@@ -327,7 +329,8 @@ def train(hyp, opt, device, tb_writer=None):
                 f'teacher={opt.teacher_weights}, '
                 f'student_strides={distill_loss.student_strides}, '
                 f'teacher_strides={distill_loss.teacher_strides}, '
-                f'requested_strides={sorted(distill_loss.strides)}'
+                f'requested_strides={sorted(distill_loss.strides)}, '
+                f'cross_strides={distill_loss.cross_stride_pairs}'
             )
     logger.info(f'Image sizes {imgsz} train, {imgsz_test} test\n'
                 f'Using {dataloader.num_workers} dataloader workers\n'
@@ -629,6 +632,8 @@ if __name__ == '__main__':
     parser.add_argument('--distill-strides', nargs='*', type=int, default=[], help='optional stride list to distill, e.g. 8 16 32')
     parser.add_argument('--distill-small-gain', type=float, default=1.0, help='multiply distillation loss for batches containing small targets')
     parser.add_argument('--distill-small-px', type=float, default=128.0, help='small target max-side threshold in train pixels')
+    parser.add_argument('--distill-cross-strides', nargs='*', default=[], help='optional teacher:student stride pairs, e.g. 8:16')
+    parser.add_argument('--distill-cross-weight', type=float, default=1.0, help='weight for cross-stride distillation pairs')
     parser.add_argument('--no-tensorboard', action='store_true', help='disable TensorBoard SummaryWriter')
     parser.add_argument('--upload_dataset', action='store_true', help='Upload dataset as W&B artifact table')
     parser.add_argument('--bbox_interval', type=int, default=-1, help='Set bounding-box image logging interval for W&B')

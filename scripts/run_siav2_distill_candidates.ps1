@@ -10,7 +10,9 @@ param(
     [string]$P4P6Weights = "",
     [string]$P3LiteWeights = "",
     [double]$DistillWeight = 0.25,
-    [double]$DistillSmallGain = 1.25
+    [double]$DistillSmallGain = 1.25,
+    [double]$P4P6CrossWeight = 0.5,
+    [switch]$NoAutoAnchor
 )
 
 $ErrorActionPreference = "Stop"
@@ -21,14 +23,20 @@ $candidateMap = @{
     "p4p6" = @{
         Name = "siav2_p4p6_w250_distill"
         Cfg = "cfg\training\yolov7-l6-siav2-p4p6-pruned-w250.yaml"
+        Hyp = "data\hyp.siav2-p4small-aux-relaxed.yaml"
         Weights = $P4P6Weights
         Strides = @("16", "32", "64")
+        CrossStrides = @("8:16")
+        CrossWeight = "$P4P6CrossWeight"
     }
     "p3lite" = @{
         Name = "siav2_p3lite_p4p5_w250_distill"
         Cfg = "cfg\training\yolov7-l6-siav2-p3lite-p4p5-w250.yaml"
+        Hyp = "data\hyp.siav2-p3lite-aux-relaxed.yaml"
         Weights = $P3LiteWeights
         Strides = @("8", "16", "32")
+        CrossStrides = @()
+        CrossWeight = "0.0"
     }
 }
 
@@ -42,7 +50,7 @@ foreach ($candidate in $Candidates) {
         "--data", $Data,
         "--cfg", $item.Cfg,
         "--weights", $item.Weights,
-        "--hyp", "data\hyp.siav2-p4small-aux-relaxed.yaml",
+        "--hyp", $item.Hyp,
         "--epochs", "$Epochs",
         "--batch-size", "$BatchSize",
         "--img-size", "$ImgSize", "$ImgSize",
@@ -51,7 +59,6 @@ foreach ($candidate in $Candidates) {
         "--name", $item.Name,
         "--close-mosaic", "20",
         "--grad-clip", "10",
-        "--noautoanchor",
         "--distill",
         "--teacher-weights", $TeacherWeights,
         "--distill-weight", "$DistillWeight",
@@ -64,6 +71,13 @@ foreach ($candidate in $Candidates) {
         "--distill-small-px", "128",
         "--distill-strides"
     ) + $item.Strides
+
+    if ($item.CrossStrides.Count -gt 0) {
+        $args += @("--distill-cross-weight", $item.CrossWeight, "--distill-cross-strides") + $item.CrossStrides
+    }
+    if ($NoAutoAnchor) {
+        $args += "--noautoanchor"
+    }
 
     conda run --no-capture-output -n yolov7 python @args
 }

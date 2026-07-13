@@ -27,6 +27,30 @@ def as_raw_outputs(output, nl):
     raise TypeError(f"cannot extract raw detection outputs from {type(output)}")
 
 
+def parse_cross_stride_pairs(pairs):
+    parsed = []
+    for pair in pairs or []:
+        if isinstance(pair, str):
+            text = pair.replace("->", ":").replace(",", ":")
+            parts = [p for p in text.split(":") if p]
+            if len(parts) != 2:
+                raise ValueError(f"invalid cross stride pair '{pair}', expected teacher:student")
+            parsed.append((int(parts[0]), int(parts[1])))
+        else:
+            parsed.append((int(pair[0]), int(pair[1])))
+    return parsed
+
+
+def pool_to_hw(x, hw):
+    target_h, target_w = int(hw[0]), int(hw[1])
+    if x.shape[2] == target_h and x.shape[3] == target_w:
+        return x
+    b, na, h, w, c = x.shape
+    pooled = x.permute(0, 1, 4, 2, 3).reshape(b * na * c, 1, h, w)
+    pooled = F.adaptive_max_pool2d(pooled, (target_h, target_w))
+    return pooled.reshape(b, na, c, target_h, target_w).permute(0, 1, 3, 4, 2).contiguous()
+
+
 class ResponseDistillationLoss(nn.Module):
     def __init__(
         self,
@@ -40,6 +64,8 @@ class ResponseDistillationLoss(nn.Module):
         box_weight=0.0,
         small_gain=1.0,
         small_px=128.0,
+        cross_strides=(),
+        cross_weight=1.0,
     ):
         super().__init__()
         self.student_det = detect_module(student_model)
@@ -55,6 +81,8 @@ class ResponseDistillationLoss(nn.Module):
         self.box_weight = float(box_weight)
         self.small_gain = max(float(small_gain), 1.0)
         self.small_px = float(small_px)
+        self.cross_stride_pairs = parse_cross_stride_pairs(cross_strides)
+        self.cross_weight = float(cross_weight)
 
     def batch_has_small_target(self, targets, imgs):
         if self.small_gain <= 1.0 or targets is None or targets.numel() == 0:
@@ -75,6 +103,7 @@ class ResponseDistillationLoss(nn.Module):
     def forward(self, student_output, teacher_output, targets=None, imgs=None):
         student_raw = as_raw_outputs(student_output, self.student_det.nl)
         teacher_raw = as_raw_outputs(teacher_output, self.teacher_det.nl)
+        student_index = {stride: i for i, stride in enumerate(self.student_strides)}
         temp = self.temperature
         device = student_raw[0].device
         total = torch.zeros((), device=device)
@@ -129,9 +158,49 @@ class ResponseDistillationLoss(nn.Module):
             components += torch.stack((layer_loss.detach(), obj_loss.detach(), cls_loss.detach(), box_loss.detach()))
             matched += 1
 
+        for teacher_stride, student_stride in self.cross_stride_pairs:
+            if self.cross_weight <= 0.0:
+                continue
+            if teacher_stride not in self.teacher_index or student_stride not in student_index:
+                continue
+            teacher = teacher_raw[self.teacher_index[teacher_stride]].detach()
+            student = student_raw[student_index[student_stride]]
+            teacher = teacher.to(student.device, dtype=student.dtype)
+            if student.shape[:2] != teacher.shape[:2] or student.shape[-1] != teacher.shape[-1]:
+                raise ValueError(
+                    f"cross distill {teacher_stride}->{student_stride} shape mismatch: "
+                    f"student={tuple(student.shape)} teacher={tuple(teacher.shape)}"
+                )
+
+            teacher_obj_prob = pool_to_hw((teacher[..., 4:5] / temp).sigmoid(), student.shape[2:4]).squeeze(-1)
+            teacher_cls_prob = pool_to_hw((teacher[..., 5:] / temp).sigmoid(), student.shape[2:4])
+            positive_mask = teacher_obj_prob >= self.conf_thres
+
+            obj_loss = F.binary_cross_entropy_with_logits(
+                student[..., 4] / temp,
+                teacher_obj_prob.detach(),
+                reduction="mean",
+            ) * (temp ** 2)
+
+            cls_loss = torch.zeros((), device=device)
+            if self.cls_weight > 0.0 and student.shape[-1] > 5:
+                cls_raw = F.binary_cross_entropy_with_logits(
+                    student[..., 5:] / temp,
+                    teacher_cls_prob.detach(),
+                    reduction="none",
+                ) * (temp ** 2)
+                cls_loss = self.masked_mean(cls_raw.mean(-1), positive_mask)
+
+            box_loss = torch.zeros((), device=device)
+            layer_loss = self.cross_weight * (self.obj_weight * obj_loss + self.cls_weight * cls_loss)
+            total = total + layer_loss
+            components += torch.stack((layer_loss.detach(), obj_loss.detach(), cls_loss.detach(), box_loss.detach()))
+            matched += 1
+
         if matched == 0:
             raise ValueError(
-                f"no matching distillation strides: student={self.student_strides}, teacher={self.teacher_strides}, requested={sorted(self.strides)}"
+                f"no matching distillation strides: student={self.student_strides}, teacher={self.teacher_strides}, "
+                f"requested={sorted(self.strides)}, cross={self.cross_stride_pairs}"
             )
 
         total = total / matched

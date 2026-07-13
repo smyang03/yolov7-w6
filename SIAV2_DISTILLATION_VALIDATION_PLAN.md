@@ -11,6 +11,7 @@ Current status:
 - `ComputeLossOTA` NameError is fixed.
 - `P4/P5/P6 w250` and `P3-lite/P4/P5 w250` are both available as training candidates.
 - W6 -> SIAV2 response distillation is implemented as an optional `train_aux.py` path.
+- Optional cross-stride response distillation is implemented for the P3-removed candidate.
 - Dataset EDA tooling is added to quantify small-object risk before training.
 
 ## 1. Distillation Design
@@ -20,6 +21,7 @@ Implemented first-stage distillation:
 - Teacher: W6 nc16 checkpoint.
 - Student: SIAV2 aux model.
 - Matching rule: only detection heads with the same stride are distilled.
+- Optional cross-stride rule: W6 stride 8 can supervise SIAV2 stride 16 by pooled response distillation.
 - Loss type: raw response distillation.
 - Default response terms:
   - objectness BCE on all matched cells.
@@ -32,6 +34,7 @@ Why stride matching:
 - `P4/P5/P6 w250` matches W6 on strides `16, 32, 64`.
 - `P3-lite/P4/P5 w250` matches W6 on strides `8, 16, 32`.
 - The same distillation code can train both candidates without hard-coded layer indices.
+- `P4/P5/P6 w250` can additionally use `8:16` cross-stride distillation so removed P3 response is not completely ignored.
 
 Implemented options in `train_aux.py`:
 
@@ -45,6 +48,8 @@ Implemented options in `train_aux.py`:
 --distill-temp 2.0
 --distill-conf-thres 0.01
 --distill-strides 8 16 32
+--distill-cross-strides 8:16
+--distill-cross-weight 0.5
 --distill-small-gain 1.25
 --distill-small-px 128
 ```
@@ -68,7 +73,7 @@ Both candidates produced a finite response distillation loss on synthetic input.
 | Candidate | CFG | Distill Strides | Purpose |
 |---|---|---:|---|
 | W6 teacher | `cfg/training/yolov7-w6-nc16.yaml` | none | baseline and teacher |
-| SIAV2 P4/P5/P6 | `cfg/training/yolov7-l6-siav2-p4p6-pruned-w250.yaml` | `16 32 64` | speed-first model |
+| SIAV2 P4/P5/P6 | `cfg/training/yolov7-l6-siav2-p4p6-pruned-w250.yaml` | `16 32 64` + cross `8:16` | speed-first model with P3 response compensation |
 | SIAV2 P3-lite/P4/P5 | `cfg/training/yolov7-l6-siav2-p3lite-p4p5-w250.yaml` | `8 16 32` | small-object risk defense |
 
 Optional speed-only reference:
@@ -97,6 +102,7 @@ Must inspect:
 - boxes per image.
 - percentage of boxes with max side <= `32`, `64`, `96`, `128` pixels at 1280.
 - anchor best possible recall.
+- invalid label lines; this must be zero before training.
 
 EDA smoke verification completed on `data/coco128.yaml`:
 
@@ -130,6 +136,7 @@ scripts\run_siav2_distill_candidates.ps1 `
 The script runs:
 
 - `P4/P5/P6 w250` with strides `16 32 64`.
+- `P4/P5/P6 w250` additionally uses cross-stride `8:16` by default.
 - `P3-lite/P4/P5 w250` with strides `8 16 32`.
 
 Use `-Candidates p3lite` or `-Candidates p4p6` to run one candidate.
@@ -150,6 +157,8 @@ Required table:
 | SIAV2 P4/P5/P6 distill | | | | | | | |
 | SIAV2 P3-lite/P4/P5 distill | | | | | | | |
 
+Use `tools/eval_siav2_size_ap.py` or `scripts/run_siav2_eval_matrix.ps1` to produce the small/medium/large AP rows.
+
 Decision:
 
 - If `P4/P5/P6` is within `3%p` and small AP is acceptable, select the speed-first model.
@@ -163,7 +172,7 @@ Feature distillation is intentionally not added in this pass.
 Reason:
 
 - It requires stable teacher/student layer-pair selection and an adapter strategy for channel mismatch.
-- Response distillation is lower-risk and works across both selected candidates by stride.
+- Response distillation plus optional cross-stride response pooling is lower-risk and works across both selected candidates.
 
 Recommended next step only if response distillation is insufficient:
 
