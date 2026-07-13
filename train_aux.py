@@ -30,6 +30,7 @@ from utils.general import labels_to_class_weights, increment_path, labels_to_ima
     fitness, strip_optimizer, get_latest_run, check_dataset, check_file, check_git_status, check_img_size, \
     check_requirements, print_mutation, set_logging, one_cycle, colorstr
 from utils.google_utils import attempt_download
+from utils.distill import ResponseDistillationLoss, load_distillation_teacher
 from utils.loss import ComputeLoss, ComputeLossAuxOTA
 from utils.plots import plot_images, plot_labels, plot_results, plot_evolution
 from utils.torch_utils import ModelEMA, select_device, intersect_dicts, torch_distributed_zero_first, is_parallel
@@ -302,6 +303,32 @@ def train(hyp, opt, device, tb_writer=None):
     scaler = amp.GradScaler(enabled=cuda)
     compute_loss_ota = ComputeLossAuxOTA(model)  # init loss class
     compute_loss = ComputeLoss(model)  # init loss class
+    teacher_model = None
+    distill_loss = None
+    if opt.distill:
+        assert opt.teacher_weights, '--teacher-weights is required when --distill is enabled'
+        teacher_model = load_distillation_teacher(opt.teacher_weights, device)
+        student_for_distill = model.module if is_parallel(model) else model
+        distill_loss = ResponseDistillationLoss(
+            student_for_distill,
+            teacher_model,
+            strides=opt.distill_strides,
+            temperature=opt.distill_temp,
+            conf_thres=opt.distill_conf_thres,
+            obj_weight=opt.distill_obj_weight,
+            cls_weight=opt.distill_cls_weight,
+            box_weight=opt.distill_box_weight,
+            small_gain=opt.distill_small_gain,
+            small_px=opt.distill_small_px,
+        )
+        if rank in [-1, 0]:
+            logger.info(
+                'Distillation enabled: '
+                f'teacher={opt.teacher_weights}, '
+                f'student_strides={distill_loss.student_strides}, '
+                f'teacher_strides={distill_loss.teacher_strides}, '
+                f'requested_strides={sorted(distill_loss.strides)}'
+            )
     logger.info(f'Image sizes {imgsz} train, {imgsz_test} test\n'
                 f'Using {dataloader.num_workers} dataloader workers\n'
                 f'Logging results to {save_dir}\n'
@@ -347,9 +374,11 @@ def train(hyp, opt, device, tb_writer=None):
         if rank in [-1, 0]:
             pbar = tqdm(pbar, total=nb)  # progress bar
         optimizer.zero_grad()
+        mdistill = torch.zeros(4, device=device)
         for i, (imgs, targets, paths, _) in pbar:  # batch -------------------------------------------------------------
             ni = i + nb * epoch  # number integrated batches (since train start)
             imgs = imgs.to(device, non_blocking=True).float() / 255.0  # uint8 to float32, 0-255 to 0.0-1.0
+            targets = targets.to(device)
 
             # Warmup
             if ni <= nw:
@@ -373,7 +402,12 @@ def train(hyp, opt, device, tb_writer=None):
             # Forward
             with amp.autocast(enabled=cuda):
                 pred = model(imgs)  # forward
-                loss, loss_items = compute_loss_ota(pred, targets.to(device), imgs)  # loss scaled by batch_size
+                loss, loss_items = compute_loss_ota(pred, targets, imgs)  # loss scaled by batch_size
+                if distill_loss is not None:
+                    with torch.no_grad():
+                        teacher_pred = teacher_model(imgs)
+                    loss_distill, distill_items = distill_loss(pred, teacher_pred, targets, imgs)
+                    loss = loss + opt.distill_weight * loss_distill
                 if rank != -1:
                     loss *= opt.world_size  # gradient averaged between devices in DDP mode
                 if opt.quad:
@@ -396,6 +430,8 @@ def train(hyp, opt, device, tb_writer=None):
             # Print
             if rank in [-1, 0]:
                 mloss = (mloss * i + loss_items) / (i + 1)  # update mean losses
+                if distill_loss is not None:
+                    mdistill = (mdistill * i + distill_items) / (i + 1)
                 mem = '%.3gG' % (torch.cuda.memory_reserved() / 1E9 if torch.cuda.is_available() else 0)  # (GB)
                 s = ('%10s' * 2 + '%10.4g' * 6) % (
                     '%g/%g' % (epoch, epochs - 1), mem, *mloss, targets.shape[0], imgs.shape[-1])
@@ -459,6 +495,13 @@ def train(hyp, opt, device, tb_writer=None):
                     tb_writer.add_scalar(tag, x, epoch)  # tensorboard
                 if wandb_logger.wandb:
                     wandb_logger.log({tag: x})  # W&B
+            if distill_loss is not None:
+                distill_tags = ['train/distill_total', 'train/distill_obj', 'train/distill_cls', 'train/distill_box']
+                for x, tag in zip(mdistill, distill_tags):
+                    if tb_writer:
+                        tb_writer.add_scalar(tag, x, epoch)
+                    if wandb_logger.wandb:
+                        wandb_logger.log({tag: x})
 
             # Update best mAP
             fi = fitness(np.array(results).reshape(1, -1))  # weighted combination of [P, R, mAP@.5, mAP@.5-.95]
@@ -575,6 +618,17 @@ if __name__ == '__main__':
     parser.add_argument('--label-smoothing', type=float, default=0.0, help='Label smoothing epsilon')
     parser.add_argument('--close-mosaic', type=int, default=-1, help='disable mosaic/mixup/copy-paste for final N epochs; -1 reads hyp close_mosaic')
     parser.add_argument('--grad-clip', type=float, default=0.0, help='clip gradient norm when > 0')
+    parser.add_argument('--distill', action='store_true', help='enable W6 teacher response distillation')
+    parser.add_argument('--teacher-weights', type=str, default='', help='teacher checkpoint for --distill')
+    parser.add_argument('--distill-weight', type=float, default=0.25, help='global distillation loss weight')
+    parser.add_argument('--distill-obj-weight', type=float, default=1.0, help='teacher objectness response weight')
+    parser.add_argument('--distill-cls-weight', type=float, default=1.0, help='teacher class response weight')
+    parser.add_argument('--distill-box-weight', type=float, default=0.0, help='teacher box-logit response weight')
+    parser.add_argument('--distill-temp', type=float, default=2.0, help='response distillation temperature')
+    parser.add_argument('--distill-conf-thres', type=float, default=0.01, help='teacher objectness threshold for cls/box distillation')
+    parser.add_argument('--distill-strides', nargs='*', type=int, default=[], help='optional stride list to distill, e.g. 8 16 32')
+    parser.add_argument('--distill-small-gain', type=float, default=1.0, help='multiply distillation loss for batches containing small targets')
+    parser.add_argument('--distill-small-px', type=float, default=128.0, help='small target max-side threshold in train pixels')
     parser.add_argument('--no-tensorboard', action='store_true', help='disable TensorBoard SummaryWriter')
     parser.add_argument('--upload_dataset', action='store_true', help='Upload dataset as W&B artifact table')
     parser.add_argument('--bbox_interval', type=int, default=-1, help='Set bounding-box image logging interval for W&B')

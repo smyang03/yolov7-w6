@@ -18,6 +18,7 @@ Important distinction:
 - Low-risk raw-head / EfficientNMS-ready deploy profiling is tracked separately in `SIAV2_LOW_RISK_DEPLOY_REPORT.md`.
 - P3-lite / deep-head tradeoff latency profiling is tracked separately in `SIAV2_P3_TRADEOFF_LATENCY_REPORT.md`.
 - Code-safety fixes and P3-lite training cfg verification are tracked separately in `SIAV2_CODE_IMPROVEMENTS_REPORT.md`.
+- W6-to-SIAV2 distillation and validation protocol are tracked separately in `SIAV2_DISTILLATION_VALIDATION_PLAN.md`.
 
 ## 2. Final training decision vs W6
 
