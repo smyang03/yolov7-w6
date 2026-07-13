@@ -10,6 +10,7 @@ param(
     [string]$Cfg = "cfg\training\yolov7-w6-nc16.yaml",
     [string]$Hyp = "data\hyp.scratch.p6.yaml",
     [int]$Workers = 8,
+    [int[]]$Freeze = @(0),
     [switch]$NoAutoAnchor
 )
 
@@ -30,8 +31,11 @@ $args = @(
     "--name", $Name,
     "--workers", "$Workers",
     "--close-mosaic", "20",
-    "--grad-clip", "10"
+    "--grad-clip", "10",
+    "--freeze"
 )
+
+$args += @($Freeze | ForEach-Object { "$_" })
 
 if ($Weights -ne "") {
     $args += @("--weights", $Weights)

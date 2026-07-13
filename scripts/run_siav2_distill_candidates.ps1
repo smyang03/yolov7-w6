@@ -12,6 +12,7 @@ param(
     [double]$DistillWeight = 0.25,
     [double]$DistillSmallGain = 1.25,
     [double]$P4P6CrossWeight = 0.5,
+    [int[]]$Freeze = @(0),
     [switch]$NoAutoAnchor
 )
 
@@ -69,6 +70,8 @@ foreach ($candidate in $Candidates) {
         "--distill-conf-thres", "0.01",
         "--distill-small-gain", "$DistillSmallGain",
         "--distill-small-px", "128",
+        "--freeze"
+    ) + @($Freeze | ForEach-Object { "$_" }) + @(
         "--distill-strides"
     ) + $item.Strides
 

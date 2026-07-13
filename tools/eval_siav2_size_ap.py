@@ -127,6 +127,7 @@ def write_markdown(path, payload):
     lines.append(f"data: `{payload['data']}`")
     lines.append(f"task: `{payload['task']}`")
     lines.append(f"imgsz: `{payload['imgsz']}`")
+    lines.append(f"bucket_unit: `{payload['bucket_unit']}`")
     lines.append(f"small_max_side: `{payload['small_max_side']}`")
     lines.append(f"medium_max_side: `{payload['medium_max_side']}`")
     lines.append("")
@@ -210,6 +211,7 @@ def evaluate(opt):
         "batch_size": opt.batch_size,
         "conf_thres": opt.conf_thres,
         "iou_thres": opt.iou_thres,
+        "bucket_unit": "input image pixels after dataloader letterbox",
         "small_max_side": opt.small_max_side,
         "medium_max_side": opt.medium_max_side,
         "seen_images": seen,
@@ -237,8 +239,8 @@ def main():
     parser.add_argument("--single-cls", action="store_true")
     parser.add_argument("--v5-metric", action="store_true")
     parser.add_argument("--no-half", action="store_true")
-    parser.add_argument("--small-max-side", type=float, default=64.0)
-    parser.add_argument("--medium-max-side", type=float, default=128.0)
+    parser.add_argument("--small-max-side", type=float, default=64.0, help="small bucket max side in input image pixels after letterbox")
+    parser.add_argument("--medium-max-side", type=float, default=128.0, help="medium bucket max side in input image pixels after letterbox")
     parser.add_argument("--project", default="runs/siav2_eval")
     parser.add_argument("--name", default="size_ap")
     parser.add_argument("--exist-ok", action="store_true")

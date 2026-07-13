@@ -788,7 +788,7 @@ class ComputeLossOTA:
                 * p_obj.unsqueeze(0).repeat(num_gt, 1, 1).sigmoid_()
             )
 
-            y = cls_preds_.sqrt_()
+            y = cls_preds_.sqrt_().clamp_(1e-6, 1.0 - 1e-6)
             pair_wise_cls_loss = F.binary_cross_entropy_with_logits(
                torch.log(y/(1-y)) , gt_cls_per_image, reduction="none"
             ).sum(-1)
@@ -1115,7 +1115,7 @@ class ComputeLossBinOTA:
                 * p_obj.unsqueeze(0).repeat(num_gt, 1, 1).sigmoid_()
             )
 
-            y = cls_preds_.sqrt_()
+            y = cls_preds_.sqrt_().clamp_(1e-6, 1.0 - 1e-6)
             pair_wise_cls_loss = F.binary_cross_entropy_with_logits(
                torch.log(y/(1-y)) , gt_cls_per_image, reduction="none"
             ).sum(-1)
@@ -1513,7 +1513,7 @@ class ComputeLossAuxOTA:
                 * p_obj.unsqueeze(0).repeat(num_gt, 1, 1).sigmoid_()
             )
 
-            y = cls_preds_.sqrt_()
+            y = cls_preds_.sqrt_().clamp_(1e-6, 1.0 - 1e-6)
             pair_wise_cls_loss = F.binary_cross_entropy_with_logits(
                torch.log(y/(1-y)) , gt_cls_per_image, reduction="none"
             ).sum(-1)
@@ -1666,7 +1666,7 @@ class ComputeLossAuxOTA:
                 * p_obj.unsqueeze(0).repeat(num_gt, 1, 1).sigmoid_()
             )
 
-            y = cls_preds_.sqrt_()
+            y = cls_preds_.sqrt_().clamp_(1e-6, 1.0 - 1e-6)
             pair_wise_cls_loss = F.binary_cross_entropy_with_logits(
                torch.log(y/(1-y)) , gt_cls_per_image, reduction="none"
             ).sum(-1)

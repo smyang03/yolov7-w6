@@ -12,6 +12,7 @@ Current status:
 - `P4/P5/P6 w250` and `P3-lite/P4/P5 w250` are both available as training candidates.
 - W6 -> SIAV2 response distillation is implemented as an optional `train_aux.py` path.
 - Optional cross-stride response distillation is implemented for the P3-removed candidate.
+- Distillation loss is scaled to the same batch-size convention as the YOLO detection loss.
 - Dataset EDA tooling is added to quantify small-object risk before training.
 
 ## 1. Distillation Design
@@ -157,7 +158,7 @@ Required table:
 | SIAV2 P4/P5/P6 distill | | | | | | | |
 | SIAV2 P3-lite/P4/P5 distill | | | | | | | |
 
-Use `tools/eval_siav2_size_ap.py` or `scripts/run_siav2_eval_matrix.ps1` to produce the small/medium/large AP rows.
+Use `tools/eval_siav2_size_ap.py` or `scripts/run_siav2_eval_matrix.ps1` to produce the small/medium/large AP rows. Size buckets are measured in input image pixels after dataloader letterbox.
 
 Decision:
 

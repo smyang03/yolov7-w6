@@ -9,6 +9,8 @@ param(
     [int]$EvalBatchSize = 8,
     [string]$TeacherInitWeights = "",
     [string[]]$Candidates = @("p4p6", "p3lite"),
+    [int[]]$TeacherFreeze = @(0),
+    [int[]]$StudentFreeze = @(0),
     [switch]$SkipEda,
     [switch]$SkipTeacher,
     [switch]$SkipStudents,
@@ -37,8 +39,10 @@ if (-not $SkipTeacher) {
         "-Device", $Device,
         "-Epochs", "$TeacherEpochs",
         "-BatchSize", "$TeacherBatchSize",
-        "-ImgSize", "$ImgSize"
+        "-ImgSize", "$ImgSize",
+        "-Freeze"
     )
+    $teacherArgs += @($TeacherFreeze | ForEach-Object { "$_" })
     if ($TeacherInitWeights -ne "") {
         $teacherArgs += @("-Weights", $TeacherInitWeights)
     }
@@ -62,7 +66,7 @@ if (-not $SkipStudents) {
         "-BatchSize", "$StudentBatchSize",
         "-ImgSize", "$ImgSize",
         "-Candidates"
-    ) + $Candidates
+    ) + $Candidates + @("-Freeze") + @($StudentFreeze | ForEach-Object { "$_" })
     if ($NoAutoAnchor) {
         $studentArgs += "-NoAutoAnchor"
     }

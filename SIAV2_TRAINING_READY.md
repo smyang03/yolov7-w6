@@ -13,6 +13,7 @@ This repo now contains the pieces needed to train and compare the SIAV2 candidat
 - Dataset EDA with label validity checks.
 - Size-bucket AP evaluation for all/small/medium/large targets.
 - Full PowerShell workflow wrapper.
+- Distillation loss is scaled to the same batch-size convention as the YOLO detection loss.
 
 ## Required Inputs
 
@@ -43,7 +44,8 @@ scripts\run_siav2_w6_teacher.ps1 `
   -Device 0 `
   -Epochs 100 `
   -BatchSize 2 `
-  -ImgSize 1280
+  -ImgSize 1280 `
+  -Freeze 0
 ```
 
 Output teacher path:
@@ -62,7 +64,8 @@ scripts\run_siav2_distill_candidates.ps1 `
   -Epochs 100 `
   -BatchSize 4 `
   -ImgSize 1280 `
-  -Candidates p4p6,p3lite
+  -Candidates p4p6,p3lite `
+  -Freeze 0
 ```
 
 Candidate behavior:
@@ -84,6 +87,12 @@ scripts\run_siav2_eval_matrix.ps1 `
 
 This writes one `size_ap.json` and `size_ap.md` per model under `runs\siav2_eval`.
 
+Size buckets use max box side in input image pixels after dataloader letterbox. At `1280`, the default buckets are:
+
+- small: `<=64 px`
+- medium: `>64 px` and `<=128 px`
+- large: `>128 px`
+
 Decision table to fill:
 
 | Model | mAP50 | mAP50-95 | small AP | medium AP | large AP | TRT FP16 1280 avg | TRT FP16 1280 median |
@@ -102,7 +111,9 @@ scripts\run_siav2_training_workflow.ps1 `
   -StudentEpochs 100 `
   -TeacherBatchSize 2 `
   -StudentBatchSize 4 `
-  -EvalBatchSize 8
+  -EvalBatchSize 8 `
+  -TeacherFreeze 0 `
+  -StudentFreeze 0
 ```
 
 Useful switches:
@@ -111,6 +122,7 @@ Useful switches:
 - `-SkipStudents` to only run EDA/teacher/eval.
 - `-SkipEval` to stop after training.
 - `-NoAutoAnchor` only when anchors are intentionally frozen.
+- `-TeacherFreeze` and `-StudentFreeze` follow YOLOv7 layer-freeze syntax, e.g. `50` freezes `model.0` through `model.49`.
 
 ## Current Guardrails
 
