@@ -16,6 +16,8 @@ Important distinction:
 - Do not directly mix `nc=80` trained latency and `nc=16` design latency as if they are the same benchmark.
 - Older `runs/siav2/latency_*.csv` files are PyTorch/CFG timing probes, not the final TensorRT table, so they are not mixed into the TRT latency ranking.
 - Low-risk raw-head / EfficientNMS-ready deploy profiling is tracked separately in `SIAV2_LOW_RISK_DEPLOY_REPORT.md`.
+- P3-lite / deep-head tradeoff latency profiling is tracked separately in `SIAV2_P3_TRADEOFF_LATENCY_REPORT.md`.
+- Code-safety fixes and P3-lite training cfg verification are tracked separately in `SIAV2_CODE_IMPROVEMENTS_REPORT.md`.
 
 ## 2. Final training decision vs W6
 
