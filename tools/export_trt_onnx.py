@@ -24,6 +24,7 @@ def main():
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--constant-folding", action="store_true")
     parser.add_argument("--no-constant-folding", action="store_true")
+    parser.add_argument("--raw-head", action="store_true", help="export raw detection head tensors without decode/concat")
     args = parser.parse_args()
 
     torch.manual_seed(args.seed)
@@ -47,8 +48,8 @@ def main():
 
     for module in model.modules():
         if isinstance(module, (Detect, AFDetect, DualDetect, DualAFDetect)):
-            module.export = False
-            module.concat = True
+            module.export = args.raw_head
+            module.concat = not args.raw_head
             module.include_nms = False
             module.end2end = False
 
@@ -59,7 +60,12 @@ def main():
     img = torch.zeros(1, 3, args.img, args.img, device=device, dtype=dtype)
     with torch.no_grad():
         y = model(img)
-    print(f"dry_run_output_shape={tuple(y.shape) if hasattr(y, 'shape') else type(y)}")
+    if isinstance(y, (list, tuple)):
+        print("dry_run_output_shapes=" + ",".join(str(tuple(t.shape)) for t in y if hasattr(t, "shape")))
+        output_names = [f"output_{i}" for i, t in enumerate(y) if hasattr(t, "shape")]
+    else:
+        print(f"dry_run_output_shape={tuple(y.shape) if hasattr(y, 'shape') else type(y)}")
+        output_names = ["output"]
 
     out = Path(args.out)
     out.parent.mkdir(parents=True, exist_ok=True)
@@ -70,7 +76,7 @@ def main():
         verbose=False,
         opset_version=args.opset,
         input_names=["images"],
-        output_names=["output"],
+        output_names=output_names,
         do_constant_folding=args.constant_folding and not args.no_constant_folding,
     )
     print(f"saved {out}")

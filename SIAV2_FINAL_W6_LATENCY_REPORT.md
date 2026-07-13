@@ -15,6 +15,7 @@ Important distinction:
 - The earlier design latency table mostly uses `nc=16` random/deploy graphs.
 - Do not directly mix `nc=80` trained latency and `nc=16` design latency as if they are the same benchmark.
 - Older `runs/siav2/latency_*.csv` files are PyTorch/CFG timing probes, not the final TensorRT table, so they are not mixed into the TRT latency ranking.
+- Low-risk raw-head / EfficientNMS-ready deploy profiling is tracked separately in `SIAV2_LOW_RISK_DEPLOY_REPORT.md`.
 
 ## 2. Final training decision vs W6
 
