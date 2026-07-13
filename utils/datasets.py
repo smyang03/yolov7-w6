@@ -346,8 +346,21 @@ class LoadStreams:  # multiple IP or RTSP cameras
 
 def img2label_paths(img_paths):
     # Define label paths as a function of image paths
-    sa, sb = os.sep + 'images' + os.sep, os.sep + 'labels' + os.sep  # /images/, /labels/ substrings
-    return ['txt'.join(x.replace(sa, sb, 1).rsplit(x.split('.')[-1], 1)) for x in img_paths]
+    label_paths = []
+    for x in img_paths:
+        path = Path(x)
+        parts = list(path.parts)
+        label_path = None
+        for image_dir in ('images', 'JPEGImages'):
+            if image_dir in parts:
+                idx = len(parts) - 1 - parts[::-1].index(image_dir)
+                parts[idx] = 'labels'
+                label_path = Path(*parts).with_suffix('.txt')
+                break
+        if label_path is None:
+            label_path = path.with_suffix('.txt')
+        label_paths.append(str(label_path))
+    return label_paths
 
 
 class LoadImagesAndLabels(Dataset):  # for training/testing

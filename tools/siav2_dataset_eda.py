@@ -28,10 +28,11 @@ def read_yaml(path):
 
 def image_to_label(path):
     parts = list(path.parts)
-    if "images" in parts:
-        idx = len(parts) - 1 - parts[::-1].index("images")
-        parts[idx] = "labels"
-        return Path(*parts).with_suffix(".txt")
+    for image_dir in ("images", "JPEGImages"):
+        if image_dir in parts:
+            idx = len(parts) - 1 - parts[::-1].index(image_dir)
+            parts[idx] = "labels"
+            return Path(*parts).with_suffix(".txt")
     return path.with_suffix(".txt")
 
 
