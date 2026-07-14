@@ -30,6 +30,9 @@ STUDENT_INIT_WEIGHTS="${STUDENT_INIT_WEIGHTS:-}"
 SKIP_EDA="${SKIP_EDA:-0}"
 SKIP_TEACHER="${SKIP_TEACHER:-0}"
 SKIP_STUDENTS="${SKIP_STUDENTS:-0}"
+SKIP_P4P6="${SKIP_P4P6:-0}"
+SKIP_P3LITE_P4P5="${SKIP_P3LITE_P4P5:-0}"
+SKIP_P3LITE_P4P6="${SKIP_P3LITE_P4P6:-0}"
 SKIP_NODISTILL="${SKIP_NODISTILL:-0}"
 SKIP_EVAL="${SKIP_EVAL:-0}"
 NOAUTOANCHOR="${NOAUTOANCHOR:-0}"
@@ -84,6 +87,22 @@ resolve_teacher_weights() {
     echo "$latest"
   else
     echo "$TEACHER_WEIGHTS"
+  fi
+}
+
+resolve_run_weights() {
+  local project="$1"
+  local name="$2"
+  local latest=""
+  latest="$(find "$project" -path "*/weights/best.pt" -type f 2>/dev/null \
+    | grep "/${name}" \
+    | xargs -r ls -t \
+    | head -n 1 || true)"
+
+  if [[ -n "$latest" ]]; then
+    echo "$latest"
+  else
+    echo "${project}/${name}/weights/best.pt"
   fi
 }
 
@@ -197,28 +216,34 @@ run_student_nodistill() {
 }
 
 if [[ "$SKIP_STUDENTS" != "1" ]]; then
-  echo "==> Training SIAV2 p4p6 distill"
-  run_student_distill "$((MASTER_PORT + 1))" \
-    siav2_p4p6_w250_crowdhuman_distill \
-    cfg/training/yolov7-l6-siav2-p4p6-pruned-w250.yaml \
-    data/hyp.siav2-p4small-aux-relaxed.yaml \
-    --distill-strides 16 32 64 \
-    --distill-cross-weight 0.5 \
-    --distill-cross-strides 8:16
+  if [[ "$SKIP_P4P6" != "1" ]]; then
+    echo "==> Training SIAV2 p4p6 distill"
+    run_student_distill "$((MASTER_PORT + 1))" \
+      siav2_p4p6_w250_crowdhuman_distill \
+      cfg/training/yolov7-l6-siav2-p4p6-pruned-w250.yaml \
+      data/hyp.siav2-p4small-aux-relaxed.yaml \
+      --distill-strides 16 32 64 \
+      --distill-cross-weight 0.5 \
+      --distill-cross-strides 8:16
+  fi
 
-  echo "==> Training SIAV2 p3lite-p4p5 distill"
-  run_student_distill "$((MASTER_PORT + 2))" \
-    siav2_p3lite_p4p5_w250_crowdhuman_distill \
-    cfg/training/yolov7-l6-siav2-p3lite-p4p5-w250.yaml \
-    data/hyp.siav2-p3lite-aux-relaxed.yaml \
-    --distill-strides 8 16 32
+  if [[ "$SKIP_P3LITE_P4P5" != "1" ]]; then
+    echo "==> Training SIAV2 p3lite-p4p5 distill"
+    run_student_distill "$((MASTER_PORT + 2))" \
+      siav2_p3lite_p4p5_w250_crowdhuman_distill \
+      cfg/training/yolov7-l6-siav2-p3lite-p4p5-w250.yaml \
+      data/hyp.siav2-p3lite-aux-relaxed.yaml \
+      --distill-strides 8 16 32
+  fi
 
-  echo "==> Training SIAV2 p3lite-p4p6 distill"
-  run_student_distill "$((MASTER_PORT + 3))" \
-    siav2_p3lite_p4p6_w250_crowdhuman_distill \
-    cfg/training/yolov7-l6-siav2-p3lite-p4p6-w250.yaml \
-    data/hyp.siav2-p3lite-p4p6-aux-relaxed.yaml \
-    --distill-strides 8 16 32 64
+  if [[ "$SKIP_P3LITE_P4P6" != "1" ]]; then
+    echo "==> Training SIAV2 p3lite-p4p6 distill"
+    run_student_distill "$((MASTER_PORT + 3))" \
+      siav2_p3lite_p4p6_w250_crowdhuman_distill \
+      cfg/training/yolov7-l6-siav2-p3lite-p4p6-w250.yaml \
+      data/hyp.siav2-p3lite-p4p6-aux-relaxed.yaml \
+      --distill-strides 8 16 32 64
+  fi
 
   if [[ "$SKIP_NODISTILL" != "1" ]]; then
     echo "==> Training SIAV2 p4p6 no-distill ablation"
@@ -233,12 +258,12 @@ if [[ "$SKIP_EVAL" != "1" ]]; then
   EVAL_DEVICE="${DEVICES%%,*}"
   declare -a EVAL_MODELS=(
     "w6_crowdhuman_teacher:${TEACHER_WEIGHTS}"
-    "siav2_p4p6_w250_crowdhuman_distill:runs/crowdhuman_distill_train/siav2_p4p6_w250_crowdhuman_distill/weights/best.pt"
-    "siav2_p3lite_p4p5_w250_crowdhuman_distill:runs/crowdhuman_distill_train/siav2_p3lite_p4p5_w250_crowdhuman_distill/weights/best.pt"
-    "siav2_p3lite_p4p6_w250_crowdhuman_distill:runs/crowdhuman_distill_train/siav2_p3lite_p4p6_w250_crowdhuman_distill/weights/best.pt"
+    "siav2_p4p6_w250_crowdhuman_distill:$(resolve_run_weights runs/crowdhuman_distill_train siav2_p4p6_w250_crowdhuman_distill)"
+    "siav2_p3lite_p4p5_w250_crowdhuman_distill:$(resolve_run_weights runs/crowdhuman_distill_train siav2_p3lite_p4p5_w250_crowdhuman_distill)"
+    "siav2_p3lite_p4p6_w250_crowdhuman_distill:$(resolve_run_weights runs/crowdhuman_distill_train siav2_p3lite_p4p6_w250_crowdhuman_distill)"
   )
   if [[ "$SKIP_NODISTILL" != "1" ]]; then
-    EVAL_MODELS+=("siav2_p4p6_w250_crowdhuman_nodistill:runs/crowdhuman_ablation_train/siav2_p4p6_w250_crowdhuman_nodistill/weights/best.pt")
+    EVAL_MODELS+=("siav2_p4p6_w250_crowdhuman_nodistill:$(resolve_run_weights runs/crowdhuman_ablation_train siav2_p4p6_w250_crowdhuman_nodistill)")
   fi
 
   for item in "${EVAL_MODELS[@]}"; do

@@ -749,6 +749,9 @@ class Model(nn.Module):
             self._initialize_biases_kpt()  # only run once
             # print('Strides: %s' % m.stride.tolist())
 
+        yaml_input_stride = int(self.yaml.get('input_stride', 0) or 0)
+        self.input_stride = max(int(self.stride.max()), yaml_input_stride, 32)
+
         # Init weights, biases
         initialize_weights(self)
         self.info()
@@ -761,7 +764,7 @@ class Model(nn.Module):
             f = [None, 3, None]  # flips (2-ud, 3-lr)
             y = []  # outputs
             for si, fi in zip(s, f):
-                xi = scale_img(x.flip(fi) if fi else x, si, gs=int(self.stride.max()))
+                xi = scale_img(x.flip(fi) if fi else x, si, gs=int(getattr(self, 'input_stride', int(self.stride.max()))))
                 yi = self.forward_once(xi)[0]  # forward
                 # cv2.imwrite(f'img_{si}.jpg', 255 * xi[0].cpu().numpy().transpose((1, 2, 0))[:, :, ::-1])  # save
                 yi[..., :4] /= si  # de-scale

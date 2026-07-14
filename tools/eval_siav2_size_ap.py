@@ -145,7 +145,7 @@ def evaluate(opt):
     set_logging()
     device = select_device(opt.device, batch_size=opt.batch_size)
     model = attempt_load(opt.weights, map_location=device)
-    gs = max(int(model.stride.max()), 32)
+    gs = max(int(getattr(model, "input_stride", int(model.stride.max()))), 32)
     imgsz = check_img_size(opt.img_size, s=gs)
     half = device.type != "cpu" and not opt.no_half
     if half:
